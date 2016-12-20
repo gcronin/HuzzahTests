@@ -24,6 +24,10 @@ void connect(void);
 /****************************** Pins ******************************************/
 
 #define LEDpin            2  // power switch tail
+#define SWITCHpin         4 // know that 2 has an input pullup resistor
+
+int current = 0;
+int last = -1;
 
 /************************* WiFi Access Point *********************************/
 
@@ -51,6 +55,8 @@ Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO
 // Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
 Adafruit_MQTT_Subscribe LED = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/test-LED");
 
+// Setup a feed called SWITCH for publishing changes.
+Adafruit_MQTT_Publish SWITCH = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/test-switch");
 
 /*************************** Sketch Code ************************************/
 
@@ -58,6 +64,9 @@ void setup() {
 
   // set LED pin as an output
   pinMode(LEDpin, OUTPUT);
+
+  // setup SWITCH pin as input pulled HI
+  pinMode(SWITCHpin, INPUT_PULLUP);
 
   Serial.begin(9600);
 
@@ -88,22 +97,27 @@ void setup() {
 
 }
 
-void loop() {
+void loop() 
+{
 
   Adafruit_MQTT_Subscribe *subscription;
 
   // ping adafruit io a few times to make sure we remain connected
-  if(! mqtt.ping(3)) {
+  if(! mqtt.ping(3)) 
+  {
     // reconnect to adafruit io
     if(! mqtt.connected())
       connect();
   }
 
+
   // this is our 'wait for incoming subscription packets' busy subloop
-  while (subscription = mqtt.readSubscription(1000)) {
+  while (subscription = mqtt.readSubscription(5000)) 
+  {
 
     // we only care about the LED events
-    if (subscription == &LED) {
+    if (subscription == &LED) 
+    {
 
       // convert mqtt ascii payload to int
       char *value = (char *)LED.lastread;
@@ -117,6 +131,29 @@ void loop() {
     }
 
   }
+
+    // grab the current state of the button
+  current = digitalRead(SWITCHpin);
+  Serial.println(current);
+
+  // return if the value hasn't changed
+  if(current == last)
+    return;
+
+  //int32_t value = (current == LOW ? 1 : 0);
+
+  // Now we can publish stuff!
+  Serial.print(F("\nSending switch value: "));
+  Serial.print(current);
+  Serial.print("... ");
+
+  if (! SWITCH.publish(current))
+    Serial.println(F("Failed."));
+  else
+    Serial.println(F("Success!"));
+
+  // save the switch state
+  last = current;
 
 }
 
