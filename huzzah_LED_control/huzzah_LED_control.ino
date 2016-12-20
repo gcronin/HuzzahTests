@@ -23,7 +23,7 @@ void connect(void);
 
 /****************************** Pins ******************************************/
 
-#define LAMP            2  // power switch tail
+#define LEDpin            2  // power switch tail
 
 /************************* WiFi Access Point *********************************/
 
@@ -47,16 +47,17 @@ Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO
 
 /****************************** Feeds ***************************************/
 
-// Setup a feed called 'lamp' for subscribing to changes.
+// Setup a feed called 'LED' for subscribing to changes.
 // Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
-Adafruit_MQTT_Subscribe lamp = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/lamp");
+Adafruit_MQTT_Subscribe LED = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/test-LED");
+
 
 /*************************** Sketch Code ************************************/
 
 void setup() {
 
-  // set power switch tail pin as an output
-  pinMode(LAMP, OUTPUT);
+  // set LED pin as an output
+  pinMode(LEDpin, OUTPUT);
 
   Serial.begin(9600);
 
@@ -79,8 +80,8 @@ void setup() {
   Serial.println(F("IP address: "));
   Serial.println(WiFi.localIP());
 
-  // listen for events on the lamp feed
-  mqtt.subscribe(&lamp);
+  // listen for events on the LED feed
+  mqtt.subscribe(&LED);
 
   // connect to adafruit io
   connect();
@@ -101,17 +102,17 @@ void loop() {
   // this is our 'wait for incoming subscription packets' busy subloop
   while (subscription = mqtt.readSubscription(1000)) {
 
-    // we only care about the lamp events
-    if (subscription == &lamp) {
+    // we only care about the LED events
+    if (subscription == &LED) {
 
       // convert mqtt ascii payload to int
-      char *value = (char *)lamp.lastread;
+      char *value = (char *)LED.lastread;
       Serial.print(F("Received: "));
       Serial.println(value);
       int current = atoi(value);
 
       // write the current state to the power switch tail
-      digitalWrite(LAMP, current == 1 ? HIGH : LOW);
+      digitalWrite(LEDpin, current == 1 ? HIGH : LOW);
 
     }
 
