@@ -24,12 +24,16 @@ void connect(void);
 /****************************** Pins ******************************************/
 
 #define LEDpin            2  // power switch tail
+#define LEDPWMpin         5
 #define SWITCHpin         4 // know that 2 has an input pullup resistor
 
-int current = 0;
+int current = 0;            // used to store the current and last readings of the switch
 int last = -1;
 
 /************************* WiFi Access Point *********************************/
+
+//#define WLAN_SSID       "W2LCC"
+//#define WLAN_PASS       "R56386Q2Q5Y5SM8N"
 
 #define WLAN_SSID       "MOTOROLA-CB317"
 #define WLAN_PASS       "10759f9fe636a551e0d3"
@@ -54,9 +58,14 @@ Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO
 // Setup a feed called 'LED' for subscribing to changes.
 // Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
 Adafruit_MQTT_Subscribe LED = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/test-LED");
+Adafruit_MQTT_Subscribe LEDPWM = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/test-PWM");
 
-// Setup a feed called SWITCH for publishing changes.
-Adafruit_MQTT_Publish SWITCH = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/test-switch");
+// Setup a feed called SWITCH for publishing changes.  MQTT_QOS_1 means that AIO should send an "OK" back
+// If we don't get that, the command SWITCH.publish() will return false.
+Adafruit_MQTT_Publish SWITCH = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/test-switch", MQTT_QOS_1);
+
+
+Adafruit_MQTT_Publish lastwill = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/test-onoff", MQTT_QOS_1);
 
 /*************************** Sketch Code ************************************/
 
@@ -64,13 +73,14 @@ void setup() {
 
   // set LED pin as an output
   pinMode(LEDpin, OUTPUT);
+  pinMode(LEDPWMpin, OUTPUT);         
 
   // setup SWITCH pin as input pulled HI
   pinMode(SWITCHpin, INPUT_PULLUP);
 
   Serial.begin(9600);
 
-  Serial.println(F("Adafruit IO Example"));
+  Serial.println(F("Adafruit IO Example"));  //F means that the string is stored in flash memory
 
   // Connect to WiFi access point.
   Serial.println(); Serial.println();
@@ -91,9 +101,15 @@ void setup() {
 
   // listen for events on the LED feed
   mqtt.subscribe(&LED);
+  mqtt.subscribe(&LEDPWM);
+
+  // Setup MQTT will to set on/off to "OFF" when we disconnect
+  mqtt.will(AIO_USERNAME "/feeds/test-onoff", "OFF");
 
   // connect to adafruit io
   connect();
+
+  lastwill.publish("ON");  // make sure we publish ON first thing after connecting
 
 }
 
@@ -102,10 +118,10 @@ void loop()
 
   Adafruit_MQTT_Subscribe *subscription;
 
-  // ping adafruit io a few times to make sure we remain connected
+  // ping adafruit io three times to make sure we remain connected
   if(! mqtt.ping(3)) 
   {
-    // reconnect to adafruit io
+    // reconnect to adafruit io if the ping failed
     if(! mqtt.connected())
       connect();
   }
@@ -115,13 +131,13 @@ void loop()
   while (subscription = mqtt.readSubscription(5000)) 
   {
 
-    // we only care about the LED events
+    // for LED events
     if (subscription == &LED) 
     {
 
       // convert mqtt ascii payload to int
       char *value = (char *)LED.lastread;
-      Serial.print(F("Received: "));
+      Serial.print(F("LED Received: "));
       Serial.println(value);
       int current = atoi(value);
 
@@ -129,8 +145,20 @@ void loop()
       digitalWrite(LEDpin, current == 1 ? HIGH : LOW);
 
     }
+    
+    // for PWM events
+    else if (subscription == &LEDPWM)
+    {
+      char *value = (char *)LEDPWM.lastread;
+      Serial.print(F("PWM Received: "));
+      Serial.println(value);
+      int current = atoi(value);
 
+      analogWrite(LEDPWMpin, current);
+
+    }
   }
+
 
     // grab the current state of the button
   current = digitalRead(SWITCHpin);
